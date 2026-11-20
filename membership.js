@@ -5,8 +5,7 @@
   const button = document.querySelector('#activate-button');
   const member = document.querySelector('#membership-status');
   const gate = document.querySelector('#activation-gate');
-  const day = 86400000;
-  const duration = 365 * day;
+  const legacyDuration = 365 * 86400000;
   const storageKey = 'shiyong-membership-v2';
 
   function read() {
@@ -24,25 +23,25 @@
   function refresh() {
     const state = read();
     const record = state.records[state.active];
-    const permanent = permanentHashes.has(state.active);
+    const legacy = annualHashes.has(state.active);
     const valid = Number.isFinite(record?.startedAt) && (
-      permanent ? record.expiresAt === null
-        : annualHashes.has(state.active) && record.expiresAt === record.startedAt + duration
+      (record.expiresAt === null && (legacy || permanentHashes.has(state.active))) ||
+      (legacy && record.expiresAt === record.startedAt + legacyDuration)
     );
-    const now = currentTime(state);
-    if (!valid || (!permanent && now >= record.expiresAt)) {
+    if (!valid) {
       document.body.classList.add('locked');
       gate.hidden = false;
-      member.textContent = valid ? '会员已到期' : '会员 · 待激活';
+      member.textContent = '会员 · 待激活';
       member.title = '';
       const dialog = document.querySelector('#dialog');
       if (dialog?.open) dialog.close();
       return;
     }
-    state.lastSeen = now;
+    record.expiresAt = null;
+    state.lastSeen = currentTime(state);
     try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch {}
-    member.textContent = permanent ? '永久会员' : '会员剩余 ' + Math.ceil((record.expiresAt - now) / day) + ' 天';
-    member.title = permanent ? '永久有效' : '到期时间：' + new Date(record.expiresAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    member.textContent = '永久会员';
+    member.title = '永久有效';
     document.body.classList.remove('locked');
     gate.hidden = true;
   }
@@ -63,15 +62,14 @@
       if (!globalThis.crypto?.subtle) throw Error('请通过 HTTPS 访问网站。');
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
       const hash = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
-      const permanent = permanentHashes.has(hash);
-      if (!permanent && !annualHashes.has(hash)) throw Error('激活码无效，请检查后重新输入。');
+      if (!permanentHashes.has(hash) && !annualHashes.has(hash)) {
+        throw Error('激活码无效，请检查后重新输入。');
+      }
 
       const state = read();
       const now = currentTime(state);
-      state.records[hash] ??= { startedAt: now, expiresAt: permanent ? null : now + duration };
-      if (!permanent && now >= state.records[hash].expiresAt) {
-        throw Error('此激活码的 365 天有效期已结束，请使用新的激活码。');
-      }
+      const startedAt = state.records[hash]?.startedAt;
+      state.records[hash] = { startedAt: Number.isFinite(startedAt) ? startedAt : now, expiresAt: null };
       state.active = hash;
       state.lastSeen = now;
       try {
