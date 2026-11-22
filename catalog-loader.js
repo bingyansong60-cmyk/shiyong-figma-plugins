@@ -16,6 +16,7 @@ async function loadCatalog() {
   const records = JSON.stringify(additions).replaceAll('<', '\\u003c');
   const header = base.slice(0, start)
     .replaceAll('579 个', (579 + additions.length) + ' 个')
+    .replace('https://ui-design-resource-library.abcgajgwhb.chatgpt.site/', 'https://bingyansong60-cmyk.github.io/ui-design-resource-library/')
     .replace('按 Figma 社区首次上线年月归档；未核实的日期单独列出。', '按本站收录月份查看新增插件。')
     .replace('<span>本月收录</span>', '');
   const app = base.slice(split)
