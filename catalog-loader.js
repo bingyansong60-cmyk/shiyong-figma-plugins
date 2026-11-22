@@ -4,9 +4,10 @@ async function loadCatalog() {
     if (!response.ok) throw new Error(file + ' HTTP ' + response.status);
     return response;
   };
-  const [base, additions] = await Promise.all([
+  const [base, additions, media] = await Promise.all([
     fetchFile('catalog-base.html').then(response => response.text()),
-    fetchFile('catalog-additions.json').then(response => response.json())
+    fetchFile('catalog-additions.json').then(response => response.json()),
+    fetchFile('community-media.json').then(response => response.json())
   ]);
 
   const application = '<script>const data=';
@@ -29,8 +30,15 @@ async function loadCatalog() {
     .replaceAll("a.communityPublishedAt||''", "a.addedAt||''")
     .replace("m?'来自用户提供的社区截图，2026-10-20 录入，非实时数据'", "m?esc(m.source+' · '+m.recordedAt+' 记录')")
     .replace('效果图 ${pos%photos.length+1}', "${d.communityMedia ? '社区封面' : '效果图 '+(pos%photos.length+1)}");
+  const galleryStyles = '<style>' +
+    '.gallery:not(.gallery-large) .gallery-image{display:block;width:100%;height:100%}' +
+    '.gallery:not(.gallery-large) .gallery-image img{width:100%!important;height:100%!important;' +
+    'max-width:100%!important;max-height:100%!important;object-fit:cover;object-position:center}' +
+    '.gallery:not(.gallery-large) .gallery-image.gallery-unavailable{display:grid;place-items:center;color:#777}' +
+    '</style>';
+  const mediaData = '<script>globalThis.catalogCommunityMedia=' + JSON.stringify(media) + ';</script>';
   document.open();
-  document.write(header + '<script src="catalog-media.js"><\/script>' +
+  document.write(header.replace('</head>', galleryStyles + '</head>') + mediaData + '<script src="catalog-media.js"><\/script>' +
     application + app.replace('];\nconst $=', '].concat(' + records + ');\nconst $='));
   document.close();
 }
